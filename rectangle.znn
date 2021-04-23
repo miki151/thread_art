@@ -1,0 +1,75 @@
+
+export import "vec2.znn";
+import "std/range.znn";
+
+export struct Rectangle {
+  Vec2 v1;
+  Vec2 v2;
+};
+
+export bool contains(Rectangle* r, Vec2* pos) {
+  return pos->x >= r->v1.x && pos->y >= r->v1.y && pos->y < r->v2.y && pos->x < r->v2.x;
+}
+
+export Vec2 size(Rectangle* r) {
+  return r->v2 - r->v1;
+}
+
+export Vec2 middle(Rectangle* r) {
+  return (r->v2 + r->v1) / 2;
+}
+
+export Rectangle plusMargin(Rectangle* r, int width) {
+  return Rectangle(r->v1 - Vec2(width, width), r->v2 + Vec2(width, width));
+}
+
+export bool overlaps(Rectangle* r1, Rectangle* r2) {
+  const x1 = r1->x_range();
+  const x2 = r2->x_range();
+  const y1 = r1->y_range();
+  const y2 = r2->y_range();
+  return x1.overlaps(&x2) && y1.overlaps(&y2);
+}
+
+export range x_range(Rectangle* r) {
+  return range(r->v1.x, r->v2.x);
+}
+
+export range y_range(Rectangle* r) {
+  return range(r->v1.y, r->v2.y);
+}
+
+export Rectangle copy(Rectangle*) = default;
+
+export struct RectangleIterator {
+  Rectangle r;
+  Vec2 pos;
+};
+
+export RectangleIterator begin(Rectangle* r) {
+  return RectangleIterator(r->copy(), r->v1.copy());
+}
+
+export RectangleIterator end(Rectangle* r) {
+  return RectangleIterator(r->copy(), Vec2(r->v1.x, r->v2.y));
+}
+
+export Vec2 operator * (RectangleIterator* it) {
+  return it->pos.copy();
+}
+
+export void operator ++ (RectangleIterator mutable* it) {
+  ++it->pos.x;
+  if (it->pos.x == it->r.v2.x) {
+    it->pos.x = it->r.v1.x;
+    ++it->pos.y;
+  }
+}
+
+export bool operator == (RectangleIterator* it1, RectangleIterator* it2) {
+  return it1->pos == it2->pos;
+}
+
+export string to_string(Rectangle* r) {
+  return "(" + to_string(&r->v1) + ", " + to_string(&r->v2) + ")";
+}

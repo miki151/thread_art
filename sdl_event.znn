@@ -1,0 +1,96 @@
+
+embed {
+#include "SDL.h"
+}
+
+export import "vec2.znn";
+
+export struct SDLQuitEvent {
+};
+
+export enum KeyType {
+  UP,
+  DOWN,
+  LEFT,
+  RIGHT,
+  ESCAPE
+};
+
+export struct SDLKeyEvent {
+  KeyType key;
+};
+
+export struct SDLUnknownEvent {
+};
+
+export enum SDLMouseButtonType {
+  LEFT,
+  MIDDLE,
+  RIGHT
+};
+
+export struct SDLMouseButtonEvent {
+  SDLMouseButtonType buttonType;
+  Vec2 pos;
+};
+
+export union SDLEvent {
+  SDLQuitEvent quit;
+  SDLKeyEvent key;
+  SDLMouseButtonEvent mouseDown;
+  SDLUnknownEvent unknown;
+};
+
+export void SDLFlushEvents() {
+  while (!!SDLPollEvent()) {}
+}
+
+export SDLEvent? SDLPollEvent() {
+  embed {
+    SDL_Event event;
+    if (SDL_PollEvent(&event)) {
+      if (event.type == SDL_JOYBUTTONDOWN) {
+        switch (event.jbutton.button) {
+          case 8: return SDLEvent::key(SDLKeyEvent{ KeyType::UP });
+          case 4:
+          case 10:  return SDLEvent::key(SDLKeyEvent{ KeyType::LEFT });
+          case 5:
+          case 11: return SDLEvent::key(SDLKeyEvent{ KeyType::RIGHT });
+          case 9:  return SDLEvent::key(SDLKeyEvent{ KeyType::DOWN });
+          case 2:  return SDLEvent::key(SDLKeyEvent{ KeyType::ESCAPE });
+        }
+      }
+      if (event.type == SDL_QUIT)
+        return SDLEvent::quit(SDLQuitEvent{});
+      if (event.type == SDL_KEYDOWN)
+        switch (event.key.keysym.sym) {
+          case SDLK_UP:    return SDLEvent::key(SDLKeyEvent{ KeyType::UP });
+          case SDLK_LEFT:  return SDLEvent::key(SDLKeyEvent{ KeyType::LEFT });
+          case SDLK_RIGHT: return SDLEvent::key(SDLKeyEvent{ KeyType::RIGHT });
+          case SDLK_DOWN:  return SDLEvent::key(SDLKeyEvent{ KeyType::DOWN });
+          case SDLK_ESCAPE:return SDLEvent::key(SDLKeyEvent{ KeyType::ESCAPE });
+          default: break;
+        }
+      if (event.type == SDL_MOUSEBUTTONDOWN) {
+        SDLMouseButtonType button = SDLMouseButtonType::LEFT;
+        switch (event.button.button) {
+          case SDL_BUTTON_LEFT:
+            button = SDLMouseButtonType::LEFT;
+            break;
+          case SDL_BUTTON_RIGHT:
+            button = SDLMouseButtonType::RIGHT;
+            break;
+          case SDL_BUTTON_MIDDLE:
+            button = SDLMouseButtonType::MIDDLE;
+            break;
+        }
+        return SDLEvent::mouseDown(SDLMouseButtonEvent{ button, Vec2{event.button.x, event.button.y} });
+      }
+      return SDLEvent::unknown(SDLUnknownEvent{});
+    }
+  }
+  return null;
+}
+
+
+

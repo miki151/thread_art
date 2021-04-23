@@ -1,0 +1,157 @@
+import "sdl.znn";
+import "std/panic.znn";
+import "std/io.znn";
+import "std/vector.znn";
+import "std/math.znn";
+import "std/flags.znn";
+import "line_drawing.znn";
+
+embed {
+#include <thread>
+  using std::thread;
+}
+
+void checkError(string? error) {
+  if (error)
+    panic(*error);
+}
+
+vector<Vec2> getPoints(Vec2 center, int size, int numPoints) {
+  const step = 3.1415 * 2 / numPoints;
+  mutable angle = 0.0;
+  mutable ret = vector<Vec2>();
+  for (i : range(0, numPoints)) {
+    ret.push_back(center + Vec2(as_int(sin(angle) * size / 2), as_int(cos(angle) * size / 2)));
+    angle += step;
+  }
+  return move(ret);
+}
+
+struct Cmd {
+  string path;
+  int numPoints;
+  int length;
+  int min;
+  int? count;
+  int? step;
+};
+
+struct Values {
+  vector<vector<int>> v;
+};
+
+Values getImageValues(SDLSurface* surface) {
+  mutable ret = Values(vector<vector<int>>());
+  for (x : range(0, surface->getSize().x)) {
+    mutable v = vector<int>();
+    for (y : range(0, surface->getSize().y)) {
+      const color = surface->getPixel(Vec2(x, y));
+      v.push_back(255 - (color.r + color.g + color.b) / 3);
+    }
+    ret.v.push_back(move(v));
+  }
+  return move(ret);
+}
+
+void fillValues(SDLSurface* surface, Values* values) {
+  for (v : Rectangle(Vec2(0, 0), surface->getSize())) {
+    const value = values->v[v->x][v->y].as_int();
+    surface->setPixel(*v, Color(255 - value, 255 - value, 255 - value));
+  }
+}
+
+int sum(Values* values, Vec2[] line) {
+  mutable ret = 0;
+  for (v : line)
+    ret += values->v[v->x][v->y];
+  return ret / as_int((*line.front() - *line.back()).lengthD());
+}
+
+void applyLine(Values mutable* values, Vec2[] line, int minus) {
+  for (v : line)
+    values->v[v->x][v->y] -= minus;
+}
+
+vector<Vec2> computeLines(mutable Values values, Vec2[] points, int numLines, int minus) {
+  mutable ret = vector<int>();
+  ret.push_back(0);
+  const minDist = (points[0] - points[points.size() / 2]).lengthD() / 2;
+  mutable used = vector(points.size(), vector(points.size(), 0)); 
+  mutable lineBuffer = vector<Vec2>(values.v.size() * 2, Vec2(0, 0));
+  for (i : range(0, numLines)) {
+    mutable int? bestRes = null;
+    mutable int? best = null;
+    for (v : points)
+      if ((*v - points[*ret.back()]).lengthD() > minDist
+          && (ret.size() < 2 || (*v - points[ret[ret.size() - 2]]).lengthD() > minDist)
+          && used[v.index][*ret.back()] == 0) {
+        const line = drawLine(lineBuffer.slice(), points[*ret.back()], *v);
+        const res = sum(&values, line);
+        if (!bestRes || res > *bestRes) {
+          bestRes = res;
+          best = v.index;
+        }
+      }
+    applyLine(&values, drawLine(lineBuffer.slice(), points[*ret.back()], points[*best]), minus);
+    used[*ret.back()][*best] = 1;
+    used[*best][*ret.back()] = 1;
+    ret.push_back(*best);
+  }
+  return ret.transform([points](int* index) { return points[*index];});
+}
+
+void drawLines(SDLSurface* surface, Vec2[] lines, Vec2 pos) {
+  for (i : range(1, lines.size())) {
+    mutable lineBuffer = vector<Vec2>(10000, Vec2(0, 0));
+    for (p : drawLine(lineBuffer.slice(), lines[i - 1], lines[i]))
+      surface->setPixel(*p + pos, Color(0, 0, 0));
+  }
+}
+
+extern struct thread;
+
+int main(string[] args) {
+  const cmd = *read_flags<Cmd>(args);
+  checkError(SDLInit());
+  const inputImage = *SDL_LoadBMP(cmd.path);
+  assert(inputImage.getSize().x == inputImage.getSize().y, "Only square images are accepted.");
+  const count = cmd.count ?? 1;
+  mutable result = vector(count, vector<Vec2>());
+  const processedImage = *createSurface(inputImage.getSize());
+  const outputImage = *createSurface(Vec2(inputImage.getSize().x, inputImage.getSize().y * count));
+  checkError(outputImage.clear(Color(255, 255, 255)));
+  const process = [&](int index, int minus) {
+    const values = getImageValues(&inputImage);
+    fillValues(&processedImage, &values);
+    const points = getPoints(inputImage.getSize() / 2, inputImage.getSize().x - 50, cmd.numPoints);
+    result[index] = computeLines(move(values), points.slice(), cmd.length, minus);
+  };
+  const threads = vector<thread>();
+  const step = cmd.step ?? 1;
+  for (i : range(0, count)) {
+    embed {
+      threads.push_back(thread([=] { invoke(&process, i, cmd.min + i * step); }));
+    }
+  }
+  embed {
+    for (auto& t : threads)
+      t.join();
+  }
+  for (i : result)
+    drawLines(&outputImage, i->slice(), Vec2(0, i.index * inputImage.getSize().y));
+  const pointSize = Vec2(6, 6);
+  const window = *SDL_CreateWindow(Vec2(inputImage.getSize().x, (1 + count) * inputImage.getSize().y), "Emilka");
+  const surface1 = *window.getSurface();
+  while (true) {
+    for (event = SDLPollEvent(); !!event; event = SDLPollEvent())
+      switch (*event) {
+        case (quit) { return 0; }
+        case (key) { if (key.key == KeyType::ESCAPE) return 0; }
+        default {}
+      }
+    checkError(surface1.blitFrom(Vec2(0, inputImage.getSize().y), &outputImage));
+    checkError(surface1.blitFrom(Vec2(0, 0), &processedImage));
+    checkError(window.update());
+  }
+  return 0;
+}

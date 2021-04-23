@@ -1,0 +1,52 @@
+import "std/range.znn";
+export import "std/vector.znn";
+import "vec2.znn";
+import "std/panic.znn";
+import "std/math.znn";
+
+vector<int> drawNormalized(int dx, int dy) {
+  assert(dx >= 0);
+  assert(dy >= 0);
+  assert(dx >= dy);
+  mutable d = 2 * dy - dx;
+  mutable y = 0;
+  mutable ret = vector<int>();
+  for (x : range(0, dx + 1)) {
+    ret.push_back(y);
+    if (d > 0) {
+      ++y;
+      d = d - 2 * dx;
+    }
+    d = d + 2 * dy;
+  }
+  return move(ret);
+}
+
+template <T>
+void swap(T mutable* x, T mutable* y) {
+  embed {
+    auto z = std::move(*x);
+    *x = std::move(*y);
+    *y = std::move(z);
+  }
+}
+
+export Vec2[] drawLine(Vec2 mutable[] buffer, Vec2 from, Vec2 to) {
+  Vec2 dir = to - from;
+  const normalized = drawNormalized(max(abs(dir.x), abs(dir.y)), min(abs(dir.x), abs(dir.y)));
+  mutable retInd = 0;
+  for (i : range(0, normalized.size())) {
+    mutable diff = Vec2(i, normalized[i]);
+    if (abs(dir.x) < abs(dir.y)) {
+      swap(&diff.x, &diff.y);
+    }
+    if (dir.y < 0)
+      diff.y = -diff.y;
+    if (dir.x < 0)
+      diff.x = -diff.x;
+    buffer[retInd] = (from + diff);
+    ++retInd;
+  }
+  return buffer.subsequence(0, retInd);
+}
+

@@ -1,0 +1,87 @@
+
+embed {
+#include "SDL.h"
+}
+
+export import "std/enum_map.znn";
+
+import "std/io.znn";
+
+export import "sdl_surface.znn";
+
+extern struct SDL_Window;
+
+extern struct TTF_Font;
+
+export embed {
+  struct _TTF_Font;
+  typedef struct _TTF_Font TTF_Font;  
+  struct SDL_Window;
+}
+
+export enum TextSize {
+  SMALL,
+  LARGE
+};
+
+export struct SDLWindow {
+  SDL_Window mutable* window;
+};
+
+export expected<SDLSurface, string> getSurface(SDLWindow* window) {
+  mutable SDLSurface? ret = null;
+  mutable string? errorRet = null;
+  embed {
+    auto surface = SDL_GetWindowSurface(window->window);
+    if (!surface)
+      errorRet = zenon_string::reference(SDL_GetError());
+    else
+      ret = SDLSurface{surface};
+  }
+  if (ret)
+    return *move(ret);
+  else
+    return *errorRet;
+}
+
+export string? update(SDLWindow* window) {
+  embed {
+    if (SDL_UpdateWindowSurface(window->window) != 0)
+      return zenon_string::reference(SDL_GetError());
+  }
+  return null;
+}
+
+export expected<SDLWindow, string> SDL_CreateWindow(Vec2? size, string title) {
+  mutable SDLWindow? ret = null;
+  mutable string? errorRet = null;
+  const gen_error = [] (string s) -> expected<SDLWindow, string> {
+    return "Error creating window: {s}";
+  };
+  embed {
+    SDL_Rect gScreenRect = { 0, 0, 320, 240 };
+    SDL_DisplayMode displayMode;
+    if( SDL_GetCurrentDisplayMode( 0, &displayMode ) == 0 ) {
+      gScreenRect.w = displayMode.w;
+      gScreenRect.h = displayMode.h;
+    }
+
+    auto window = SDL_CreateWindow(title.data(), SDL_WINDOWPOS_UNDEFINED,
+        SDL_WINDOWPOS_UNDEFINED, size ? size->x : gScreenRect.w, size ? size->y : gScreenRect.y,
+        0 );
+    if (!window)
+      return invoke(&gen_error, zenon_string::reference(SDL_GetError()));
+    ret = SDLWindow{window};
+/*    if (-1 == SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt"))
+      return invoke(&gen_error, zenon_string::reference(SDL_GetError()));
+    auto res = SDL_NumJoysticks();
+    if (res < 0)
+      return invoke(&gen_error, zenon_string::reference(SDL_GetError()));
+    if (res == 0)
+      return invoke(&gen_error, zenon_string::reference("No joysticks found"));
+    if (!SDL_JoystickOpen(0))
+      return invoke(&gen_error, zenon_string::reference(SDL_GetError()));*/
+  }
+  return *move(ret);
+}
+
