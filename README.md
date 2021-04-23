@@ -2,7 +2,7 @@
 
 Create thread art from any image.
 
-![alt text](http://keeperrl.com/~michal/emilka.png)
+![alt text](http://keeperrl.com/~michal/emilka2.png)
 
 To use this tool first you'll need to compile the Zenon compiler from https://github.com/miki151/zenon.
 
